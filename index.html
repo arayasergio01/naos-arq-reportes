@@ -423,8 +423,8 @@ async function generarReporte() {
   try {
     setStep(1);
     
-    // Split transcription into manageable chunks to prevent Netlify Function timeouts
-    const MAX_CHARS = 7000;
+    // Split transcription into manageable chunks (4,000 chars) to prevent Netlify Function timeouts
+    const MAX_CHARS = 4000;
     const chunks = chunkText(transcripcion, MAX_CHARS);
     const estructuras = [];
 
@@ -441,7 +441,8 @@ ${chunks[i]}
 Analiza esta sección de la transcripción de inspección. Descarta conversación irrelevante. Agrupa el contenido en secciones temáticas lógicas según lo que se discutió en esta parte (pueden ser módulos, sistemas constructivos, áreas, temas técnicos — lo que mejor aplique al contenido).
 
 Reglas:
-- Redacta en tercera persona, tono técnico-profesional, frases concisas y precisas
+- Redacta en tercera persona, tono técnico-profesional.
+- Sé extremadamente conciso y directo en las descripciones técnicas. Genera respuestas compactas y precisas para optimizar el rendimiento y evitar redundancias.
 - Cada sección tiene TÍTULO en mayúsculas
 - Describe los temas técnicos identificados en esta sección de forma estructurada
 - Si en esta parte de la inspección se generan tareas pendientes claras, inclúyelas bajo una sección "TAREAS PENDIENTES" con subsecciones apropiadas (ej: "Pendientes de Obra", "Pendientes de Definición con Propietario")
@@ -454,7 +455,7 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional. No te pr
       const resp = await fetch('/.netlify/functions/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 8000, messages: [{ role: 'user', content: prompt }] })
+        body: JSON.stringify({ model: 'claude-3-5-haiku-20241022', max_tokens: 8000, messages: [{ role: 'user', content: prompt }] })
       });
       const data = await resp.json();
       if (!resp.ok || data.error) throw new Error(`Error en API para Parte ${i + 1}: ` + (data.error || JSON.stringify(data)));
