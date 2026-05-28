@@ -500,7 +500,8 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional. No te pr
     const fechaLimpia = fecha.replace(/-/g, '');
     const nombreDoc = `${consecutivo}-_${fechaLimpia}_${nombre.replace(/\s+/g, '_').toUpperCase()}_INSPECCION`;
     const copia = await apiDrive('POST', `/files/${TEMPLATE_ID}/copy`, { name: nombreDoc });
-    if (!copia.id) throw new Error('No se pudo duplicar el template. Verifica permisos en Drive.');
+    if (copia.error) throw new Error('Error de Google Drive API: ' + (copia.error.message || JSON.stringify(copia.error)));
+    if (!copia.id) throw new Error('No se pudo duplicar el template. Copia incompleta. Verifica los permisos en Drive.');
     const docId = copia.id;
 
     setStep(4);
