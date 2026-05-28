@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>naos-arq / Reportes de Inspección</title>
+<style>
+  :root {
+    --red: #C00000;
+    --black: #1a1a1a;
+    --gray: #6b6b6b;
+    --light: #f5f5f5;
+    --border: #e0e0e0;
+    --green: #1e7e34;
+    --green-bg: #d4edda;
+    --blue: #1a73e8;
+    --blue-bg: #e8f0fe;
+    --danger: #c62828;
+    --danger-bg: #fde8e8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: var(--black); min-height: 100vh; }
+  .header { background: white; border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+  .logo { font-size: 13px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--black); }
+  .logo span { color: var(--gray); font-weight: 400; }
+  .auth-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 12px; border-radius: 20px; font-weight: 500; cursor: pointer; border: none; }
+  .auth-badge.on { background: var(--green-bg); color: var(--green); }
+  .auth-badge.off { background: var(--light); color: var(--gray); border: 1px solid var(--border); }
+  .container { max-width: 680px; margin: 0 auto; padding: 32px 24px; }
+  .card { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+  .card-title { font-size: 11px; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 12px; color: var(--gray); font-weight: 500; }
+  .field input, .field textarea, .field select { width: 100%; font-family: inherit; font-size: 14px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: white; color: var(--black); outline: none; transition: border-color .15s; }
+  .field input:focus, .field textarea:focus { border-color: var(--blue); }
+  .field textarea { resize: vertical; min-height: 220px; line-height: 1.5; }
+  .counter { font-size: 11px; color: var(--gray); text-align: right; margin-top: 3px; }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 20px; gap: 0; }
+  .tab { font-size: 13px; padding: 10px 16px; cursor: pointer; color: var(--gray); border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; border-left: none; border-right: none; border-top: none; transition: color .15s; font-family: inherit; }
+  .tab.active { color: var(--black); border-bottom-color: var(--black); font-weight: 600; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .btn { font-family: inherit; font-size: 14px; font-weight: 500; padding: 10px 20px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; transition: opacity .15s, background .15s; border: none; width: 100%; }
+  .btn-primary { background: var(--black); color: white; }
+  .btn-primary:hover { opacity: .85; }
+  .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-secondary { background: white; color: var(--black); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--light); }
+  .btn-google { background: white; color: #444; border: 1px solid var(--border); font-weight: 500; }
+  .btn-google:hover { background: #f8f8f8; }
+  .flex-row { display: flex; gap: 10px; }
+  .steps { display: flex; flex-direction: column; gap: 0; }
+  .step { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--gray); }
+  .step:last-child { border-bottom: none; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; transition: background .3s; }
+  .step.active { color: var(--black); font-weight: 500; }
+  .step.active .dot { background: var(--blue); }
+  .step.done { color: var(--green); }
+  .step.done .dot { background: var(--green); }
+  .alert { border-radius: 8px; padding: 12px 16px; font-size: 13px; line-height: 1.6; margin-top: 16px; display: none; }
+  .alert.info { background: var(--blue-bg); color: #1557b0; display: block; }
+  .alert.success { background: var(--green-bg); color: var(--green); display: block; }
+  .alert.error { background: var(--danger-bg); color: var(--danger); display: block; }
+  .result-link { display: flex; align-items: center; gap: 12px; background: var(--light); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-top: 16px; text-decoration: none; color: var(--black); font-size: 14px; font-weight: 500; transition: background .15s; }
+  .result-link:hover { background: var(--border); }
+  .summary { font-size: 13px; color: var(--gray); line-height: 2; }
+  .summary strong { color: var(--black); }
+  .hint { font-size: 12px; color: var(--gray); background: var(--light); border-radius: 6px; padding: 10px 12px; margin-top: 10px; line-height: 1.6; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.4); border-top-color: white; border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  footer { text-align: center; font-size: 11px; color: var(--gray); padding: 32px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">naos-arq <span>/ reportes de inspección</span></div>
+  <button class="auth-badge off" id="auth-btn" onclick="handleAuth()">
+    ● No conectado
+  </button>
+</div>
+
+<div class="container">
+
+  <div class="tabs">
+    <button class="tab active" onclick="goTab('proyecto')" id="t-proyecto">Proyecto</button>
+    <button class="tab" onclick="goTab('transcripcion')" id="t-transcripcion">Transcripción</button>
+    <button class="tab" onclick="goTab('generar')" id="t-generar">Generar</button>
+  </div>
+
+  <!-- TAB 1: PROYECTO -->
+  <div id="tab-proyecto" class="tab-content active">
+    <div class="card">
+      <div class="card-title">Datos del proyecto</div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="grid-2">
+          <div class="field"><label>Nombre del proyecto</label><input id="nombre" type="text" placeholder="CASA CASIOPEA" /></div>
+          <div class="field"><label>Código</label><input id="codigo" type="text" placeholder="24.045.NAC.05.40" /></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Cantón</label><input id="canton" type="text" placeholder="Carrillo" /></div>
+          <div class="field"><label>Provincia</label><input id="provincia" type="text" placeholder="Guanacaste" /></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Fecha de inspección</label><input id="fecha" type="date" /></div>
+          <div class="field"><label>Consecutivo</label><input id="consecutivo" type="number" placeholder="1" min="1" /></div>
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="goTab('transcripcion')">Siguiente →</button>
+  </div>
+
+  <!-- TAB 2: TRANSCRIPCIÓN -->
+  <div id="tab-transcripcion" class="tab-content">
+    <div class="card">
+      <div class="card-title">Transcripción del audio</div>
+      <div class="field">
+        <label>Pegue aquí la transcripción completa (Whisper u otra herramienta)</label>
+        <textarea id="transcripcion" placeholder="Claude va a analizar esta transcripción y va a:&#10;• Identificar los temas relevantes para el proyecto&#10;• Descartar conversación irrelevante&#10;• Estructurar el contenido en secciones lógicas según los temas tratados&#10;• Incluir sección de Tareas Pendientes si la inspección las genera"></textarea>
+        <div class="counter" id="counter">0 caracteres</div>
+      </div>
+    </div>
+    <div class="flex-row">
+      <button class="btn btn-secondary" onclick="goTab('proyecto')">← Atrás</button>
+      <button class="btn btn-primary" onclick="goTab('generar');renderSummary()">Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- TAB 3: GENERAR -->
+  <div id="tab-generar" class="tab-content">
+    <div class="card">
+      <div class="card-title">Resumen</div>
+      <div class="summary" id="summary">Complete los datos del proyecto primero.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Proceso</div>
+      <div class="steps">
+        <div class="step" id="s1"><div class="dot"></div>Analizar transcripción con Claude</div>
+        <div class="step" id="s2"><div class="dot"></div>Estructurar secciones y contenido</div>
+        <div class="step" id="s3"><div class="dot"></div>Duplicar template en Google Drive</div>
+        <div class="step" id="s4"><div class="dot"></div>Aplicar datos de portada</div>
+        <div class="step" id="s5"><div class="dot"></div>Escribir contenido con formato naos-arq</div>
+        <div class="step" id="s6"><div class="dot"></div>Documento listo</div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="btn-gen" onclick="generarReporte()">
+      ✦ Generar reporte en Google Drive
+    </button>
+
+    <div class="alert" id="alert"></div>
+    <a id="result-link" class="result-link" style="display:none" target="_blank" href="#">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      <span id="result-text">Abrir en Google Docs</span>
+    </a>
+  </div>
+
+</div>
+
+<footer>naos-arq / generador de reportes · sergio@naos-arq.com</footer>
+
+<script>
+const CLIENT_ID = '791650456800-97ms9n7hbsgctfh3lgpaa7in42rb74h0.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/drive';
+const TEMPLATE_ID = '1vCfvoRvqXSFsqsVPZiCkLP6H6msisBsPm7g2NJAP_bw';
+let accessToken = null;
+
+// Set today's date
+document.getElementById('fecha').value = new Date().toISOString().split('T')[0];
+document.getElementById('transcripcion').addEventListener('input', function(){
+  document.getElementById('counter').textContent = this.value.length.toLocaleString() + ' caracteres';
+});
+
+// Check token from URL hash (OAuth redirect)
+function checkTokenInUrl() {
+  const hash = window.location.hash;
+  if (hash.includes('access_token=')) {
+    const params = new URLSearchParams(hash.slice(1));
+    const token = params.get('access_token');
+    if (token) {
+      accessToken = token;
+      localStorage.setItem('naos_token', token);
+      setAuthOn();
+      window.location.hash = '';
+    }
+  }
+  // Also check localStorage
+  const saved = localStorage.getItem('naos_token');
+  if (saved && !accessToken) {
+    accessToken = saved;
+    setAuthOn();
+  }
+}
+
+function setAuthOn() {
+  const btn = document.getElementById('auth-btn');
+  btn.textContent = '● Conectado · sergio@naos-arq.com';
+  btn.className = 'auth-badge on';
+}
+
+function setAuthOff() {
+  accessToken = null;
+  localStorage.removeItem('naos_token');
+  const btn = document.getElementById('auth-btn');
+  btn.textContent = '● No conectado';
+  btn.className = 'auth-badge off';
+}
+
+function handleAuth() {
+  if (accessToken) { setAuthOff(); return; }
+  const redirectUri = window.location.origin + window.location.pathname;
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    redirect_uri: redirectUri,
+    response_type: 'token',
+    scope: SCOPES,
+    prompt: 'consent'
+  });
+  window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
+}
+
+function goTab(name) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('t-' + name).classList.add('active');
+}
+
+function renderSummary() {
+  const n = document.getElementById('nombre').value || '—';
+  const c = document.getElementById('codigo').value || '—';
+  const canton = document.getElementById('canton').value || '—';
+  const prov = document.getElementById('provincia').value || '—';
+  const fecha = document.getElementById('fecha').value || '—';
+  const consec = String(document.getElementById('consecutivo').value || 1).padStart(3, '0');
+  const chars = document.getElementById('transcripcion').value.length;
+  document.getElementById('summary').innerHTML =
+    `<strong>${n}</strong> · ${c}<br>${canton}, ${prov}<br>Fecha: ${fecha} · Consecutivo: ${consec}<br>Transcripción: ${chars.toLocaleString()} caracteres`;
+}
+
+function setStep(n) {
+  for (let i = 1; i <= 6; i++) {
+    const el = document.getElementById('s' + i);
+    el.classList.remove('active', 'done');
+    if (i < n) el.classList.add('done');
+    if (i === n) el.classList.add('active');
+  }
+}
+
+function showAlert(msg, type) {
+  const a = document.getElementById('alert');
+  a.textContent = msg;
+  a.className = 'alert ' + type;
+}
+
+async function apiDrive(method, path, body) {
+  const r = await fetch('https://www.googleapis.com/drive/v3' + path, {
+    method,
+    headers: { 'Authorization': 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (r.status === 401) { setAuthOff(); throw new Error('Token expirado. Reconecta tu cuenta de Google.'); }
+  return r.json();
+}
+
+async function apiDocs(method, path, body) {
+  const r = await fetch('https://docs.googleapis.com/v1' + path, {
+    method,
+    headers: { 'Authorization': 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (r.status === 401) { setAuthOff(); throw new Error('Token expirado. Reconecta tu cuenta de Google.'); }
+  return r.json();
+}
+
+async function generarReporte() {
+  if (!accessToken) { showAlert('Primero conecta tu cuenta de Google usando el botón arriba a la derecha.', 'error'); return; }
+  const nombre = document.getElementById('nombre').value.trim();
+  const codigo = document.getElementById('codigo').value.trim();
+  const canton = document.getElementById('canton').value.trim();
+  const provincia = document.getElementById('provincia').value.trim();
+  const fecha = document.getElementById('fecha').value;
+  const consecutivo = String(document.getElementById('consecutivo').value || 1).padStart(3, '0');
+  const transcripcion = document.getElementById('transcripcion').value.trim();
+  if (!nombre || !transcripcion) { showAlert('Completa el nombre del proyecto y la transcripción.', 'error'); return; }
+
+  const btn = document.getElementById('btn-gen');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Generando...';
+  document.getElementById('result-link').style.display = 'none';
+
+  try {
+    setStep(1);
+    showAlert('Analizando transcripción con Claude...', 'info');
+
+    const prompt = `Eres un arquitecto senior que redacta reportes de inspección para la firma naos-arq.
+
+PROYECTO: ${nombre} | CÓDIGO: ${codigo} | UBICACIÓN: ${canton}, ${provincia} | FECHA: ${fecha}
+
+TRANSCRIPCIÓN:
+${transcripcion}
+
+Analiza la transcripción. Descarta conversación irrelevante. Agrupa el contenido en secciones temáticas lógicas según lo que se discutió (pueden ser módulos, sistemas constructivos, áreas, temas técnicos — lo que mejor aplique al contenido).
+
+Reglas:
+- Redacta en tercera persona, tono técnico-profesional, frases concisas y precisas
+- Cada sección tiene TÍTULO en mayúsculas
+- Subitems numerados jerárquicamente: 1.1., 1.2., etc.
+- Los subitems pueden tener sub-subitems (1.1.1., 1.1.2.) cuando hay subsecciones dentro de un tema
+- Si la inspección genera tareas pendientes claras, incluye al final una sección "TAREAS PENDIENTES" con subsecciones apropiadas (ej: "Pendientes de Obra", "Pendientes de Definición con Propietario")
+- Si no hay tareas claras, no incluyas esa sección
+- No inventes información que no esté en la transcripción
+- Sé específico con medidas, materiales y detalles técnicos que aparezcan
+
+Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
+{"secciones":[{"titulo":"TÍTULO","items":[{"numero":"1.1.","texto":"Descripción técnica.","subitems":[{"numero":"1.1.1.","texto":"Detalle específico."}]}]}]}`;
+
+    const resp = await fetch('/.netlify/functions/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error('API Error: ' + (data.error || JSON.stringify(data)));
+    if (!data.content || !data.content[0]) throw new Error('Respuesta inesperada de Claude: ' + JSON.stringify(data));
+    const raw = data.content[0].text.trim();
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('Claude no retornó JSON válido.');
+    const estructura = JSON.parse(match[0]);
+
+    setStep(2);
+    setStep(3);
+    showAlert('Duplicando template en Google Drive...', 'info');
+
+    const fechaLimpia = fecha.replace(/-/g, '');
+    const nombreDoc = `${consecutivo}-_${fechaLimpia}_${nombre.replace(/\s+/g, '_').toUpperCase()}_INSPECCION`;
+    const copia = await apiDrive('POST', `/files/${TEMPLATE_ID}/copy`, { name: nombreDoc });
+    if (!copia.id) throw new Error('No se pudo duplicar el template. Verifica permisos en Drive.');
+    const docId = copia.id;
+
+    setStep(4);
+    showAlert('Aplicando datos de portada...', 'info');
+
+    await apiDocs('POST', `/documents/${docId}:batchUpdate`, {
+      requests: [
+        { replaceAllText: { containsText: { text: '(NOMBRE PROYECTO)', matchCase: true }, replaceText: nombre.toUpperCase() } },
+        { replaceAllText: { containsText: { text: '(CODIGO PROYECTO)', matchCase: true }, replaceText: codigo } },
+        { replaceAllText: { containsText: { text: '(CANTON), (PROVINCIA)', matchCase: true }, replaceText: `${canton.toUpperCase()}, ${provincia.toUpperCase()}` } },
+        { replaceAllText: { containsText: { text: '(FECHA)', matchCase: true }, replaceText: fecha } },
+        { replaceAllText: { containsText: { text: '(CONSECUTIVO)', matchCase: true }, replaceText: consecutivo } },
+      ]
+    });
+
+    setStep(5);
+    showAlert('Escribiendo contenido con formato naos-arq...', 'info');
+
+    const doc = await apiDocs('GET', `/documents/${docId}`);
+    const body = doc.body.content;
+    let deleteStart = null, deleteEnd = null;
+    for (const el of body) {
+      if (el.paragraph) {
+        const text = el.paragraph.elements?.map(e => e.textRun?.content || '').join('').trim();
+        if (text === '(TITULO 1)' && deleteStart === null) deleteStart = el.startIndex;
+        if (deleteStart !== null && text === 'ARQ. SERGIO ARAYA G.') { deleteEnd = el.startIndex; break; }
+      }
+    }
+    if (deleteStart === null || deleteEnd === null) throw new Error('No se encontró la estructura del template. Verifica que el template tenga los marcadores correctos.');
+
+    const reqs = [];
+    reqs.push({ deleteContentRange: { range: { startIndex: deleteStart, endIndex: deleteEnd } } });
+
+    let idx = deleteStart;
+    const secs = estructura.secciones;
+
+    for (let si = 0; si < secs.length; si++) {
+      const sec = secs[si];
+      const n = si + 1;
+
+      // Título de sección
+      const tTxt = `${n}.\t${sec.titulo}\n`;
+      reqs.push({ insertText: { location: { index: idx }, text: tTxt } });
+      reqs.push({ updateParagraphStyle: { range: { startIndex: idx, endIndex: idx + tTxt.length }, paragraphStyle: { spaceAbove: { magnitude: 14, unit: 'PT' }, spaceBelow: { magnitude: 6, unit: 'PT' } }, fields: 'spaceAbove,spaceBelow' } });
+      reqs.push({ updateTextStyle: { range: { startIndex: idx, endIndex: idx + tTxt.length - 1 }, textStyle: { bold: true, foregroundColor: { color: { rgbColor: { red: 0.753, green: 0, blue: 0 } } }, fontSize: { magnitude: 11, unit: 'PT' }, weightedFontFamily: { fontFamily: 'Arial' } }, fields: 'bold,foregroundColor,fontSize,weightedFontFamily' } });
+      idx += tTxt.length;
+
+      // Items
+      for (const item of sec.items) {
+        const iTxt = `\t${item.numero}\t${item.texto}\n`;
+        reqs.push({ insertText: { location: { index: idx }, text: iTxt } });
+        reqs.push({ updateParagraphStyle: { range: { startIndex: idx, endIndex: idx + iTxt.length }, paragraphStyle: { spaceAbove: { magnitude: 3, unit: 'PT' }, spaceBelow: { magnitude: 3, unit: 'PT' }, alignment: 'JUSTIFIED' }, fields: 'spaceAbove,spaceBelow,alignment' } });
+        reqs.push({ updateTextStyle: { range: { startIndex: idx, endIndex: idx + iTxt.length - 1 }, textStyle: { bold: false, foregroundColor: { color: { rgbColor: { red: 0, green: 0, blue: 0 } } }, fontSize: { magnitude: 11, unit: 'PT' }, weightedFontFamily: { fontFamily: 'Arial' } }, fields: 'bold,foregroundColor,fontSize,weightedFontFamily' } });
+        idx += iTxt.length;
+
+        // Sub-items
+        if (item.subitems && item.subitems.length > 0) {
+          for (const sub of item.subitems) {
+            const sTxt = `\t\t${sub.numero}\t${sub.texto}\n`;
+            reqs.push({ insertText: { location: { index: idx }, text: sTxt } });
+            reqs.push({ updateParagraphStyle: { range: { startIndex: idx, endIndex: idx + sTxt.length }, paragraphStyle: { spaceAbove: { magnitude: 2, unit: 'PT' }, spaceBelow: { magnitude: 2, unit: 'PT' }, alignment: 'JUSTIFIED' }, fields: 'spaceAbove,spaceBelow,alignment' } });
+            reqs.push({ updateTextStyle: { range: { startIndex: idx, endIndex: idx + sTxt.length - 1 }, textStyle: { bold: false, foregroundColor: { color: { rgbColor: { red: 0, green: 0, blue: 0 } } }, fontSize: { magnitude: 11, unit: 'PT' }, weightedFontFamily: { fontFamily: 'Arial' } }, fields: 'bold,foregroundColor,fontSize,weightedFontFamily' } });
+            idx += sTxt.length;
+          }
+        }
+      }
+
+      // Espacio entre secciones
+      if (si < secs.length - 1) {
+        reqs.push({ insertText: { location: { index: idx }, text: '\n' } });
+        idx++;
+      }
+    }
+
+    const res = await apiDocs('POST', `/documents/${docId}:batchUpdate`, { requests: reqs });
+    if (res.error) throw new Error('Error al escribir contenido: ' + res.error.message);
+
+    setStep(6);
+    showAlert('¡Reporte generado exitosamente!', 'success');
+
+    const rl = document.getElementById('result-link');
+    rl.href = `https://docs.google.com/document/d/${docId}/edit`;
+    document.getElementById('result-text').textContent = nombreDoc + ' — Abrir en Google Docs';
+    rl.style.display = 'flex';
+
+  } catch (e) {
+    showAlert('Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '✦ Generar reporte en Google Drive';
+  }
+}
+
+// Init
+checkTokenInUrl();
+</script>
+</body>
+</html>
