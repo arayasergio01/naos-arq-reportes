@@ -1,9 +1,6 @@
+[build]
+  command = "bash build.sh"
+  publish = "."
+
 [functions]
   directory = "netlify/functions"
-  node_bundler = "esbuild"
-
-[functions."claude"]
-  timeout = 30
-
-[functions."claude-bg"]  
-  timeout = 30
