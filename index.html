@@ -275,6 +275,135 @@ async function apiDocs(method, path, body) {
   return r.json();
 }
 
+// --- Helper Functions for Chunking and Merging ---
+
+function chunkText(text, maxChars = 7000) {
+  const paragraphs = text.split('\n');
+  const chunks = [];
+  let currentChunk = '';
+
+  for (let paragraph of paragraphs) {
+    if (paragraph.length > maxChars) {
+      if (currentChunk) {
+        chunks.push(currentChunk.trim());
+        currentChunk = '';
+      }
+      const sentences = paragraph.match(/[^.!?]+[.!?]+(\s|$)/g) || [paragraph];
+      for (const sentence of sentences) {
+        if ((currentChunk + ' ' + sentence).length > maxChars) {
+          if (currentChunk) {
+            chunks.push(currentChunk.trim());
+          }
+          currentChunk = sentence;
+        } else {
+          currentChunk = currentChunk ? currentChunk + ' ' + sentence : sentence;
+        }
+      }
+    } else if ((currentChunk + '\n' + paragraph).length > maxChars) {
+      if (currentChunk) {
+        chunks.push(currentChunk.trim());
+      }
+      currentChunk = paragraph;
+    } else {
+      currentChunk = currentChunk ? currentChunk + '\n' + paragraph : paragraph;
+    }
+  }
+  if (currentChunk) {
+    chunks.push(currentChunk.trim());
+  }
+  return chunks;
+}
+
+function cleanTextNumberPrefix(text) {
+  if (!text) return '';
+  return text.replace(/^(\d+\.)+\s*/, '').replace(/^[a-z]\)\s*/i, '').replace(/^-\s*/, '').trim();
+}
+
+function renumberSeccion(sec, n) {
+  const renumberedItems = [];
+  let itemIndex = 1;
+
+  for (const item of sec.items) {
+    const itemNum = `${n}.${itemIndex}.`;
+    const renumberedSubitems = [];
+    let subIndex = 1;
+
+    if (item.subitems && item.subitems.length > 0) {
+      for (const sub of item.subitems) {
+        const subNum = `${n}.${itemIndex}.${subIndex}.`;
+        renumberedSubitems.push({
+          numero: subNum,
+          texto: cleanTextNumberPrefix(sub.texto)
+        });
+        subIndex++;
+      }
+    }
+
+    renumberedItems.push({
+      numero: itemNum,
+      texto: cleanTextNumberPrefix(item.texto),
+      subitems: renumberedSubitems
+    });
+    itemIndex++;
+  }
+
+  return {
+    titulo: sec.titulo,
+    items: renumberedItems
+  };
+}
+
+function mergeEstructuras(estructuras) {
+  const mergedSecciones = [];
+  const seccionMap = new Map();
+
+  for (const estructura of estructuras) {
+    if (!estructura || !estructura.secciones) continue;
+    
+    for (const sec of estructura.secciones) {
+      if (!sec.titulo) continue;
+      const normalizedTitle = sec.titulo.trim().toUpperCase();
+      
+      if (seccionMap.has(normalizedTitle)) {
+        const existingSec = seccionMap.get(normalizedTitle);
+        if (sec.items) {
+          existingSec.items.push(...sec.items);
+        }
+      } else {
+        const newSec = {
+          titulo: sec.titulo.trim().toUpperCase(),
+          items: sec.items ? [...sec.items] : []
+        };
+        mergedSecciones.push(newSec);
+        seccionMap.set(normalizedTitle, newSec);
+      }
+    }
+  }
+
+  let secIndex = 1;
+  const finalSecciones = [];
+  let tareasPendientesSec = null;
+
+  for (const sec of mergedSecciones) {
+    if (sec.titulo.includes('TAREAS PENDIENTES') || sec.titulo.includes('PENDIENTE')) {
+      tareasPendientesSec = sec;
+      continue;
+    }
+
+    const renumberedSec = renumberSeccion(sec, secIndex);
+    finalSecciones.push(renumberedSec);
+    secIndex++;
+  }
+
+  if (tareasPendientesSec) {
+    const renumberedSec = renumberSeccion(tareasPendientesSec, secIndex);
+    finalSecciones.push(renumberedSec);
+  }
+
+  return { secciones: finalSecciones };
+}
+
+// --- Main Report Generation Function ---
 async function generarReporte() {
   if (!accessToken) { showAlert('Primero conecta tu cuenta de Google usando el botón arriba a la derecha.', 'error'); return; }
   const nombre = document.getElementById('nombre').value.trim();
@@ -293,73 +422,77 @@ async function generarReporte() {
 
   try {
     setStep(1);
-    showAlert('Analizando transcripción con Claude...', 'info');
+    
+    // Split transcription into manageable chunks to prevent Netlify Function timeouts
+    const MAX_CHARS = 7000;
+    const chunks = chunkText(transcripcion, MAX_CHARS);
+    const estructuras = [];
 
-    // Si la transcripción es muy larga, la procesamos en partes
-    const MAX_CHARS = 8000;
-    let transcripcionFinal = transcripcion;
-    if (transcripcion.length > MAX_CHARS) {
-      // Tomamos las primeras y últimas partes para capturar inicio y cierre de reunión
-      const mitad = Math.floor(MAX_CHARS / 2);
-      transcripcionFinal = transcripcion.substring(0, mitad) + 
-        '\n\n[... sección intermedia omitida por extensión ...]\n\n' + 
-        transcripcion.substring(transcripcion.length - mitad);
-    }
-
-    const prompt = `Eres un arquitecto senior que redacta reportes de inspección para la firma naos-arq.
+    for (let i = 0; i < chunks.length; i++) {
+      showAlert(`Analizando transcripción con Claude (Parte ${i + 1} de ${chunks.length})...`, 'info');
+      
+      const prompt = `Eres un arquitecto senior que redacta reportes de inspección para la firma naos-arq.
 
 PROYECTO: ${nombre} | CÓDIGO: ${codigo} | UBICACIÓN: ${canton}, ${provincia} | FECHA: ${fecha}
 
-TRANSCRIPCIÓN:
-${transcripcionFinal}
+TRANSCRIPCIÓN (Parte ${i + 1} de ${chunks.length}):
+${chunks[i]}
 
-Analiza la transcripción. Descarta conversación irrelevante. Agrupa el contenido en secciones temáticas lógicas según lo que se discutió (pueden ser módulos, sistemas constructivos, áreas, temas técnicos — lo que mejor aplique al contenido).
+Analiza esta sección de la transcripción de inspección. Descarta conversación irrelevante. Agrupa el contenido en secciones temáticas lógicas según lo que se discutió en esta parte (pueden ser módulos, sistemas constructivos, áreas, temas técnicos — lo que mejor aplique al contenido).
 
 Reglas:
 - Redacta en tercera persona, tono técnico-profesional, frases concisas y precisas
 - Cada sección tiene TÍTULO en mayúsculas
-- Subitems numerados jerárquicamente: 1.1., 1.2., etc.
-- Los subitems pueden tener sub-subitems (1.1.1., 1.1.2.) cuando hay subsecciones dentro de un tema
-- Si la inspección genera tareas pendientes claras, incluye al final una sección "TAREAS PENDIENTES" con subsecciones apropiadas (ej: "Pendientes de Obra", "Pendientes de Definición con Propietario")
-- Si no hay tareas claras, no incluyas esa sección
+- Describe los temas técnicos identificados en esta sección de forma estructurada
+- Si en esta parte de la inspección se generan tareas pendientes claras, inclúyelas bajo una sección "TAREAS PENDIENTES" con subsecciones apropiadas (ej: "Pendientes de Obra", "Pendientes de Definición con Propietario")
 - No inventes información que no esté en la transcripción
 - Sé específico con medidas, materiales y detalles técnicos que aparezcan
 
-Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
-{"secciones":[{"titulo":"TÍTULO","items":[{"numero":"1.1.","texto":"Descripción técnica.","subitems":[{"numero":"1.1.1.","texto":"Detalle específico."}]}]}]}`;
+Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional. No te preocupes por el orden de numeración global (1.1, 1.2, etc.), usa cualquier numeración temporal (ej. 1.1) ya que el frontend se encargará de renumerar todo secuencialmente al final:
+{"secciones":[{"titulo":"TÍTULO DE SECCIÓN","items":[{"numero":"1.1.","texto":"Descripción técnica.","subitems":[{"numero":"1.1.1.","texto":"Detalle específico."}]}]}]}`;
 
-    const resp = await fetch('/.netlify/functions/claude', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 8000, messages: [{ role: 'user', content: prompt }] })
-    });
-    const data = await resp.json();
-    if (!resp.ok || data.error) throw new Error('API Error: ' + (data.error || JSON.stringify(data)));
-    if (!data.content || !data.content[0]) throw new Error('Respuesta inesperada de Claude: ' + JSON.stringify(data));
-    const raw = data.content[0].text.trim();
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('Claude no retornó JSON válido. Raw: ' + raw.substring(0, 200));
-    let estructura;
-    try {
-      estructura = JSON.parse(match[0]);
-    } catch(parseErr) {
-      // Intenta reparar JSON truncado
-      let fixed = match[0];
-      // Cuenta llaves y corchetes para cerrar lo que falta
-      let opens = (fixed.match(/\[/g)||[]).length - (fixed.match(/\]/g)||[]).length;
-      let openB = (fixed.match(/\{/g)||[]).length - (fixed.match(/\}/g)||[]).length;
-      // Cierra strings abiertos
-      if ((fixed.match(/"/g)||[]).length % 2 !== 0) fixed += '"';
-      for(let i=0;i<opens;i++) fixed += ']';
-      for(let i=0;i<openB;i++) fixed += '}';
+      const resp = await fetch('/.netlify/functions/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 8000, messages: [{ role: 'user', content: prompt }] })
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(`Error en API para Parte ${i + 1}: ` + (data.error || JSON.stringify(data)));
+      if (!data.content || !data.content[0]) throw new Error(`Respuesta inesperada de Claude en Parte ${i + 1}: ` + JSON.stringify(data));
+      
+      const raw = data.content[0].text.trim();
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error(`Claude no retornó JSON válido en Parte ${i + 1}. Raw: ` + raw.substring(0, 200));
+      
+      let parteEstructura;
       try {
-        estructura = JSON.parse(fixed);
-      } catch(e2) {
-        throw new Error('JSON inválido: ' + parseErr.message);
+        parteEstructura = JSON.parse(match[0]);
+      } catch(parseErr) {
+        // Intenta reparar JSON truncado
+        let fixed = match[0];
+        let opens = (fixed.match(/\[/g)||[]).length - (fixed.match(/\]/g)||[]).length;
+        let openB = (fixed.match(/\{/g)||[]).length - (fixed.match(/\}/g)||[]).length;
+        if ((fixed.match(/"/g)||[]).length % 2 !== 0) fixed += '"';
+        for(let j=0;j<opens;j++) fixed += ']';
+        for(let j=0;j<openB;j++) fixed += '}';
+        try {
+          parteEstructura = JSON.parse(fixed);
+        } catch(e2) {
+          throw new Error(`JSON inválido en Parte ${i + 1}: ` + parseErr.message);
+        }
       }
+      estructuras.push(parteEstructura);
     }
 
     setStep(2);
+    showAlert('Estructurando secciones y combinando contenidos...', 'info');
+    
+    // Merge structures, consolidate sections with identical names, and renumber items sequentially
+    const estructura = mergeEstructuras(estructuras);
+    if (!estructura.secciones || estructura.secciones.length === 0) {
+      throw new Error('No se extrajo ninguna sección válida de la transcripción.');
+    }
+
     setStep(3);
     showAlert('Duplicando template en Google Drive...', 'info');
 
