@@ -507,7 +507,7 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional. No te pr
     setStep(4);
     showAlert('Aplicando datos de portada...', 'info');
 
-    await apiDocs('POST', `/documents/${docId}:batchUpdate`, {
+    const updatePortada = await apiDocs('POST', `/documents/${docId}:batchUpdate`, {
       requests: [
         { replaceAllText: { containsText: { text: '(NOMBRE PROYECTO)', matchCase: true }, replaceText: nombre.toUpperCase() } },
         { replaceAllText: { containsText: { text: '(CODIGO PROYECTO)', matchCase: true }, replaceText: codigo } },
@@ -516,11 +516,14 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional. No te pr
         { replaceAllText: { containsText: { text: '(CONSECUTIVO)', matchCase: true }, replaceText: consecutivo } },
       ]
     });
+    if (updatePortada.error) throw new Error('Error de Google Docs API al actualizar portada: ' + (updatePortada.error.message || JSON.stringify(updatePortada.error)));
 
     setStep(5);
     showAlert('Escribiendo contenido con formato naos-arq...', 'info');
 
     const doc = await apiDocs('GET', `/documents/${docId}`);
+    if (doc.error) throw new Error('Error de Google Docs API al obtener documento: ' + (doc.error.message || JSON.stringify(doc.error)));
+    if (!doc.body || !doc.body.content) throw new Error('No se pudo leer la estructura del documento duplicado.');
     const body = doc.body.content;
     let deleteStart = null, deleteEnd = null;
     for (const el of body) {
