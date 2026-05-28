@@ -295,12 +295,17 @@ async function generarReporte() {
     setStep(1);
     showAlert('Analizando transcripción con Claude...', 'info');
 
+    // Limitar transcripción a 5000 caracteres para evitar timeout
+    const transcripcionLimitada = transcripcion.length > 5000 
+      ? transcripcion.substring(0, 5000) + '\n[... transcripción recortada para procesamiento ...]'
+      : transcripcion;
+
     const prompt = `Eres un arquitecto senior que redacta reportes de inspección para la firma naos-arq.
 
 PROYECTO: ${nombre} | CÓDIGO: ${codigo} | UBICACIÓN: ${canton}, ${provincia} | FECHA: ${fecha}
 
 TRANSCRIPCIÓN:
-${transcripcion}
+${transcripcionLimitada}
 
 Analiza la transcripción. Descarta conversación irrelevante. Agrupa el contenido en secciones temáticas lógicas según lo que se discutió (pueden ser módulos, sistemas constructivos, áreas, temas técnicos — lo que mejor aplique al contenido).
 
@@ -326,9 +331,6 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
     if (!resp.ok || data.error) throw new Error('API Error: ' + (data.error || JSON.stringify(data)));
     if (!data.content || !data.content[0]) throw new Error('Respuesta inesperada de Claude: ' + JSON.stringify(data));
     const raw = data.content[0].text.trim();
-    console.log('RAW CLAUDE RESPONSE:', raw.substring(0, 500));
-    console.log('RAW LENGTH:', raw.length);
-    console.log('FINISH REASON:', data.content[0].stop_reason || data.stop_reason);
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('Claude no retornó JSON válido. Raw: ' + raw.substring(0, 200));
     let estructura;
