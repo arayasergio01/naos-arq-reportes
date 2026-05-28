@@ -455,7 +455,7 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional. No te pr
       const resp = await fetch('/.netlify/functions/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-3-5-haiku-20241022', max_tokens: 8000, messages: [{ role: 'user', content: prompt }] })
+        body: JSON.stringify({ model: 'claude-3-haiku-20240307', max_tokens: 8000, messages: [{ role: 'user', content: prompt }] })
       });
       const data = await resp.json();
       if (!resp.ok || data.error) throw new Error(`Error en API para Parte ${i + 1}: ` + (data.error || JSON.stringify(data)));
