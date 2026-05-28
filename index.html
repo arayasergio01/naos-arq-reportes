@@ -327,8 +327,26 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
     if (!data.content || !data.content[0]) throw new Error('Respuesta inesperada de Claude: ' + JSON.stringify(data));
     const raw = data.content[0].text.trim();
     const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('Claude no retornó JSON válido.');
-    const estructura = JSON.parse(match[0]);
+    if (!match) throw new Error('Claude no retornó JSON válido. Raw: ' + raw.substring(0, 200));
+    let estructura;
+    try {
+      estructura = JSON.parse(match[0]);
+    } catch(parseErr) {
+      // Intenta reparar JSON truncado
+      let fixed = match[0];
+      // Cuenta llaves y corchetes para cerrar lo que falta
+      let opens = (fixed.match(/\[/g)||[]).length - (fixed.match(/\]/g)||[]).length;
+      let openB = (fixed.match(/\{/g)||[]).length - (fixed.match(/\}/g)||[]).length;
+      // Cierra strings abiertos
+      if ((fixed.match(/"/g)||[]).length % 2 !== 0) fixed += '"';
+      for(let i=0;i<opens;i++) fixed += ']';
+      for(let i=0;i<openB;i++) fixed += '}';
+      try {
+        estructura = JSON.parse(fixed);
+      } catch(e2) {
+        throw new Error('JSON inválido: ' + parseErr.message);
+      }
+    }
 
     setStep(2);
     setStep(3);
