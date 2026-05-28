@@ -295,12 +295,23 @@ async function generarReporte() {
     setStep(1);
     showAlert('Analizando transcripción con Claude...', 'info');
 
+    // Si la transcripción es muy larga, la procesamos en partes
+    const MAX_CHARS = 8000;
+    let transcripcionFinal = transcripcion;
+    if (transcripcion.length > MAX_CHARS) {
+      // Tomamos las primeras y últimas partes para capturar inicio y cierre de reunión
+      const mitad = Math.floor(MAX_CHARS / 2);
+      transcripcionFinal = transcripcion.substring(0, mitad) + 
+        '\n\n[... sección intermedia omitida por extensión ...]\n\n' + 
+        transcripcion.substring(transcripcion.length - mitad);
+    }
+
     const prompt = `Eres un arquitecto senior que redacta reportes de inspección para la firma naos-arq.
 
 PROYECTO: ${nombre} | CÓDIGO: ${codigo} | UBICACIÓN: ${canton}, ${provincia} | FECHA: ${fecha}
 
 TRANSCRIPCIÓN:
-${transcripcion}
+${transcripcionFinal}
 
 Analiza la transcripción. Descarta conversación irrelevante. Agrupa el contenido en secciones temáticas lógicas según lo que se discutió (pueden ser módulos, sistemas constructivos, áreas, temas técnicos — lo que mejor aplique al contenido).
 
@@ -317,14 +328,9 @@ Reglas:
 Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
 {"secciones":[{"titulo":"TÍTULO","items":[{"numero":"1.1.","texto":"Descripción técnica.","subitems":[{"numero":"1.1.1.","texto":"Detalle específico."}]}]}]}`;
 
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('/.netlify/functions/claude', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': 'ANTHROPIC_KEY_PLACEHOLDER',
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 8000, messages: [{ role: 'user', content: prompt }] })
     });
     const data = await resp.json();
