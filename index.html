@@ -295,17 +295,12 @@ async function generarReporte() {
     setStep(1);
     showAlert('Analizando transcripción con Claude...', 'info');
 
-    // Limitar transcripción a 5000 caracteres para evitar timeout
-    const transcripcionLimitada = transcripcion.length > 5000 
-      ? transcripcion.substring(0, 5000) + '\n[... transcripción recortada para procesamiento ...]'
-      : transcripcion;
-
     const prompt = `Eres un arquitecto senior que redacta reportes de inspección para la firma naos-arq.
 
 PROYECTO: ${nombre} | CÓDIGO: ${codigo} | UBICACIÓN: ${canton}, ${provincia} | FECHA: ${fecha}
 
 TRANSCRIPCIÓN:
-${transcripcionLimitada}
+${transcripcion}
 
 Analiza la transcripción. Descarta conversación irrelevante. Agrupa el contenido en secciones temáticas lógicas según lo que se discutió (pueden ser módulos, sistemas constructivos, áreas, temas técnicos — lo que mejor aplique al contenido).
 
@@ -322,9 +317,14 @@ Reglas:
 Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
 {"secciones":[{"titulo":"TÍTULO","items":[{"numero":"1.1.","texto":"Descripción técnica.","subitems":[{"numero":"1.1.1.","texto":"Detalle específico."}]}]}]}`;
 
-    const resp = await fetch('/.netlify/functions/claude', {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': 'ANTHROPIC_KEY_PLACEHOLDER',
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
       body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 8000, messages: [{ role: 'user', content: prompt }] })
     });
     const data = await resp.json();
